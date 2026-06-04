@@ -1,0 +1,11 @@
+[messages control]
+
+# Disable some distracting checks.
+# See http://pylint.pycqa.org/en/latest/user_guide/message-control.html
+# For now ... disable
+# all C (convention) warnings
+# all R (Refactoring) warnings
+# along with any specific (distracting) errors/warnings.
+# See http://pylint.pycqa.org/en/latest/user_guide/message-control.html
+disable = C0103, R, E0401, E1101, E1136,
+          anomalous-backslash-in-string

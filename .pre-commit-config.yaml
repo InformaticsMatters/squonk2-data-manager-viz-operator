@@ -1,0 +1,65 @@
+---
+minimum_pre_commit_version: 3.3.3
+
+repos:
+
+# commit-msg hooks
+# ----------
+
+# Conventional Commit message checker (commitizen)
+- repo: https://github.com/commitizen-tools/commitizen
+  rev: v3.31.0
+  hooks:
+  - id: commitizen
+    stages:
+    - commit-msg
+
+# pre-commit hooks
+# ----------
+
+# Standard pre-commit rules
+- repo: https://github.com/pre-commit/pre-commit-hooks
+  rev: v5.0.0
+  hooks:
+  - id: check-case-conflict
+  - id: check-docstring-first
+  - id: check-executables-have-shebangs
+  - id: check-shebang-scripts-are-executable
+  - id: detect-private-key
+  - id: end-of-file-fixer
+  - id: trailing-whitespace
+    args:
+    - --markdown-linebreak-ext=md
+# Black (uncompromising) Python code formatter
+- repo: https://github.com/psf/black
+  rev: 25.1.0
+  hooks:
+  - id: black
+    args:
+    - --target-version
+    - py313
+# MyPy
+- repo: https://github.com/pre-commit/mirrors-mypy
+  rev: v1.17.0
+  hooks:
+  - id: mypy
+    files: ^operator
+# Pylint
+- repo: https://github.com/pycqa/pylint
+  rev: v3.3.7
+  hooks:
+  - id: pylint
+    files: ^operator
+# YAML Lint
+# We have to adjust this hook, which looks for yaml files,
+# because some of our files are 'disguised' and not found by
+# 'identify', used by pre-commit. So we basically say...
+# All files that end '.yaml' or '.yaml.j2'
+# See https://pre-commit.com/#filtering-files-with-types
+- repo: https://github.com/adrienverge/yamllint
+  rev: v1.37.1
+  hooks:
+  - id: yamllint
+    types:
+    - file
+    files: (\.yaml|\.yaml.j2)$

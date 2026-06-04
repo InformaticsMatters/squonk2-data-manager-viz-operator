@@ -1,0 +1,6 @@
+black == 25.1.0
+mypy == 1.17.0
+pre-commit == 4.2.0
+pylint == 3.3.7
+pytest == 8.4.1
+yamllint == 1.37.1
