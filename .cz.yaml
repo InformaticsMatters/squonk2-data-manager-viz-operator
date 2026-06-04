@@ -1,0 +1,48 @@
+---
+# Commitizen custom configuration.
+# Here we extend it to add all our recognised types into the changelog.
+# The default ignores pretty-much anything other than 'feat' and 'fix'.
+#
+# See the default at...
+# https://github.com/commitizen-tools/commitizen/
+#   blob/095f02e6c419b60c90aa84b8cebc9e9eacc8a391/commitizen/defaults.py#L83
+commitizen:
+  name: cz_customize
+  # What's the first revision we're interested in?
+  # For us it's the revision we started
+  # enforcing the use of conventional commits.
+  changelog_start_rev: 0.1.0
+  customize:
+    schema_pattern: "^(?P<change_type>feat|fix|perf|refactor|remove|style|test|build|docs|ci|chore|BREAKING CHANGE)(?:\\((?P<scope>[^()\\r\\n]*)\\)|\\()?(?P<breaking>!)?:\\s(?P<message>.*)?"
+    commit_parser: "^(?P<change_type>feat|fix|perf|refactor|remove|style|test|build|docs|ci|chore|BREAKING CHANGE)(?:\\((?P<scope>[^()\\r\\n]*)\\)|\\()?(?P<breaking>!)?:\\s(?P<message>.*)?"
+    # The changelog_pattern identifies the commit types
+    # that will be included.
+    # Build the changelog with 'cz ch' on the staging or production branches.
+    changelog_pattern: "^(feat|fix|perf|refactor|remove|style|test|build|docs|ci|chore)?"
+    # A mapping of type to its group name in the changelog.
+    # We call 'feat' commits 'New Features'
+    change_type_map:
+      build: Build
+      docs: Documentation
+      feat: New Features
+      fix: Bug Fixes
+      perf: Performance Improvements
+      refactor: Refactoring
+      remove: Removed
+      style: Stylistic Changes
+      ci: CI/CD
+      chore: Chore
+      test: Testing
+    # The order of commit types in the changelog...
+    change_type_order:
+    - "feat"
+    - "fix"
+    - "perf"
+    - "refactor"
+    - "remove"
+    - "style"
+    - "test"
+    - "build"
+    - "ci"
+    - "chore"
+    - "docs"

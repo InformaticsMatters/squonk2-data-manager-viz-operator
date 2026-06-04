@@ -1,0 +1,23 @@
+---
+
+# Operator Image Docker-Compose file.
+#
+# You can control some of the behaviour of the build
+# with environment variables: -
+#
+# - IMAGE_TAG The image version tag (default 35.0.0)
+#
+# Note: The image tag MUST use the major version of the
+#       kubernetes package the operator is built against.
+#       The minor/patch values are free for your use.
+#
+# i.e.: -
+#
+#   IMAGE_TAG=35.0.0-alpha.1 docker compose build
+#   IMAGE_TAG=35.0.0-alpha.1 docker compose push
+
+services:
+  operator:
+    build:
+      context: operator
+    image: informaticsmatters/data-manager-viz-operator:${IMAGE_TAG:-35.0.0}

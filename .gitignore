@@ -1,0 +1,11 @@
+__pycache__
+.idea
+.coverage
+.mypy_cache
+.pytest_cache
+venv
+
+parameters.*
+
+**/*.swp
+**/.DS_Store
