@@ -46,6 +46,10 @@ that repo when a behaviour here is unclear.
   requires these — see the note in `README.md` and `handlers.py`.)
 - Created objects are adopted via `kopf.adopt`, so Kubernetes garbage-collects
   them when the custom resource is deleted (no explicit delete handler).
+- The viz-app image is in a **private** registry, so instance Pods reference a
+  pre-existing pull Secret **by name** (`SVO_IMAGE_PULL_SECRET`, or per-instance
+  `spec.imDataManager.imagePullSecrets`). The operator never handles registry
+  credentials; the Secret is provisioned per namespace out-of-band.
 - The operator image tag's **major** version tracks the `kubernetes` PyPI
   package major (currently `35`, for Kubernetes 1.35).
 

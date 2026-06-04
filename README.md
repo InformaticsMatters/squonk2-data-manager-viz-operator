@@ -38,8 +38,9 @@ Data-Manager-provided material is namespaced under the `imDataManager` property
 of the resource `spec`. Recognised properties (all optional, with operator
 defaults) include `image`, `serviceAccountName`, `resources`,
 `securityContext` (`runAsUser`, `runAsGroup`), `project` (`claimName`, `id`),
-`ingressClass`, `ingressDomain`, `ingressTlsSecret`, `ingressProxyBodySize`
-and `labels` (a list of `key=value` strings).
+`ingressClass`, `ingressDomain`, `ingressTlsSecret`, `ingressProxyBodySize`,
+`imagePullSecrets` (a list of Secret names) and `labels` (a list of
+`key=value` strings).
 
 ## The Pod environment and Project volume
 
@@ -69,10 +70,36 @@ variables are prefixed `SVO_` (Squonk2 Viz Operator): -
 | `INGRESS_DOMAIN` | _(required)_ | Default ingress host for instances |
 | `INGRESS_TLS_SECRET` | _(unset)_ | Default TLS secret; if unset, cert-manager is used |
 | `INGRESS_CERT_ISSUER` | _(unset)_ | cert-manager cluster issuer (when no TLS secret) |
+| `SVO_IMAGE_PULL_SECRET` | _(unset)_ | Name of a `dockerconfigjson` Secret for the (private) image registry |
 | `SVO_POD_NODE_SELECTOR_KEY` | `informaticsmatters.com/purpose-application` | Pod node-selector key |
 | `SVO_POD_NODE_SELECTOR_VALUE` | `yes` | Pod node-selector value |
 | `SVO_APPLY_POD_PRIORITY_CLASS` | _(unset)_ | Any value applies a Pod priority class |
 | `SVO_DEFAULT_POD_PRIORITY_CLASS` | `im-application-low` | Priority class to apply |
+
+## Private image registry (pull secret)
+
+The default image (`ghcr.io/informaticsmatters/squonk2-viz-app`) lives in a
+**private** registry, so the instance **Pod** needs an image pull secret to
+pull it. The operator references such a secret **by name** and adds it to the
+Deployment's Pod spec as `imagePullSecrets`; it never holds or creates registry
+credentials itself.
+
+- Set `SVO_IMAGE_PULL_SECRET` to the Secret name for all instances, and/or
+  override per-instance via `spec.imDataManager.imagePullSecrets` (a list of
+  names). A per-instance value takes precedence over the operator default. If
+  neither is set, Pods are created without `imagePullSecrets` (fine for a
+  public image).
+- The named Secret (type `kubernetes.io/dockerconfigjson`) **must already
+  exist in each Data Manager namespace** where instances are launched — it is
+  provisioned out-of-band, e.g.: -
+
+```
+kubectl create secret docker-registry ghcr-pull-secret \
+  --docker-server=ghcr.io \
+  --docker-username=<github-user> \
+  --docker-password=<PAT-with-read:packages> \
+  -n <dm-namespace>
+```
 
 ## Contributing
 
