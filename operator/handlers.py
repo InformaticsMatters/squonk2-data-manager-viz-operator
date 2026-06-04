@@ -105,6 +105,18 @@ def _get_pod_priority_class() -> Optional[str]:
     return None
 
 
+def _get_image_pull_secrets() -> List[str]:
+    """Default image pull Secret name(s) for instance Pods.
+
+    Read from SVO_IMAGE_PULL_SECRET (a single dockerconfigjson Secret name).
+    Empty when unset, in which case Pods are created without imagePullSecrets
+    (e.g. for a public image). The named Secret must already exist in the
+    instance's namespace; the operator never handles registry credentials.
+    """
+    name = os.environ.get("SVO_IMAGE_PULL_SECRET")
+    return [name] if name else []
+
+
 def image_pull_policy_for(image: str) -> str:
     """Return the imagePullPolicy appropriate for the given image reference.
 
@@ -155,6 +167,7 @@ def build_deployment_body(
     node_selector: Dict[str, str],
     pod_priority_class: Optional[str] = None,
     extra_labels: Optional[Dict[str, str]] = None,
+    image_pull_secrets: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """Build the Deployment object for a visualisation instance.
 
@@ -232,6 +245,12 @@ def build_deployment_body(
     # Additional labels (e.g. the Data Manager 'instance' label)?
     if extra_labels:
         deployment_body["spec"]["template"]["metadata"]["labels"].update(extra_labels)
+
+    # Image pull secret(s) for a private registry?
+    if image_pull_secrets:
+        deployment_body["spec"]["template"]["spec"]["imagePullSecrets"] = [
+            {"name": secret_name} for secret_name in image_pull_secrets
+        ]
 
     return deployment_body
 
@@ -408,6 +427,13 @@ def create(spec: Dict[str, Any], name: str, namespace: str, **_: Any) -> Dict[st
     ingress_cert_issuer = _get_ingress_cert_issuer()
     ingress_path = f"/{name}"
 
+    # Image pull secret(s) for the (private) registry. A per-instance list
+    # overrides the operator default (SVO_IMAGE_PULL_SECRET). The named Secret
+    # must already exist in the instance's namespace.
+    image_pull_secrets = material.get("imagePullSecrets", _get_image_pull_secrets())
+    if isinstance(image_pull_secrets, str):
+        image_pull_secrets = [image_pull_secrets]
+
     # Additional labels?
     #
     # The Data Manager provides labels as 'key=value' strings. We copy them to
@@ -456,6 +482,7 @@ def create(spec: Dict[str, Any], name: str, namespace: str, **_: Any) -> Dict[st
         node_selector=_get_pod_node_selector(),
         pod_priority_class=_get_pod_priority_class(),
         extra_labels=extra_labels,
+        image_pull_secrets=image_pull_secrets,
     )
     kopf.adopt(deployment_body)
     _create_ignoring_conflict(

@@ -11,6 +11,8 @@ import os
 import sys
 from typing import Any, Dict, List
 
+import pytest
+
 # Make 'operator/handlers.py' importable.
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "operator"))
 
@@ -173,6 +175,35 @@ def test_build_deployment_body_adds_extra_labels_to_pod_template() -> None:
     )["spec"]["template"]["metadata"]["labels"]
     assert labels["deployment"] == "viz-abcdef"
     assert labels["data-manager.informaticsmatters.com/instance"] == "viz-abcdef"
+
+
+def test_build_deployment_body_omits_image_pull_secrets_by_default() -> None:
+    pod_spec = _example_deployment()["spec"]["template"]["spec"]
+    assert "imagePullSecrets" not in pod_spec
+
+
+def test_build_deployment_body_adds_image_pull_secrets_when_given() -> None:
+    pod_spec = _example_deployment(image_pull_secrets=["ghcr-pull-secret"])["spec"][
+        "template"
+    ]["spec"]
+    assert pod_spec["imagePullSecrets"] == [{"name": "ghcr-pull-secret"}]
+
+
+# --- image pull secret config -----------------------------------------------
+
+
+def test_get_image_pull_secrets_from_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SVO_IMAGE_PULL_SECRET", "ghcr-pull-secret")
+    assert handlers._get_image_pull_secrets() == ["ghcr-pull-secret"]
+
+
+def test_get_image_pull_secrets_empty_when_unset(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("SVO_IMAGE_PULL_SECRET", raising=False)
+    assert handlers._get_image_pull_secrets() == []
 
 
 # --- ingress ----------------------------------------------------------------
