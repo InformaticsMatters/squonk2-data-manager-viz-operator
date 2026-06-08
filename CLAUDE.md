@@ -39,7 +39,7 @@ that repo when a behaviour here is unclear.
 
 ## Key facts
 
-- The viz-app container listens on port **3000** and **exits at start-up
+- The viz-app container listens on port **5170** and **exits at start-up
   unless `DM_PROJECT_DIR` is set**. The operator mounts the Project PVC at
   `/project` and injects `DM_PROJECT_DIR`, `DM_PROJECT_ID`, `DM_INSTANCE_ID`
   and `DM_INSTANCE_OWNER`. (Issue #1 said "no Pod env vars", but the image

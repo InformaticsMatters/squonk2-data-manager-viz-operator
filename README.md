@@ -66,7 +66,7 @@ For each instance the operator: -
 - Injects the environment variables `DM_PROJECT_DIR` (`/project`),
   `DM_PROJECT_ID`, `DM_INSTANCE_ID` and `DM_INSTANCE_OWNER`.
 
-The viz-app's Express server listens on container port **3000**, which is
+The viz-app's Express server listens on container port **5170**, which is
 exposed by the Service and routed to by the path-based Ingress.
 
 ## Operator configuration (environment variables)

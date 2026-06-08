@@ -19,7 +19,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "operator"))
 
 import handlers  # noqa: E402  pylint: disable=wrong-import-position
 
-CONTAINER_PORT = 3000
+CONTAINER_PORT = 5170
 PROJECT_MOUNT_PATH = "/project"
 
 
