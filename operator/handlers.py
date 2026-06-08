@@ -27,9 +27,8 @@ import kopf
 _REQUEST_TIMEOUT = (30, 20)
 
 # The container port the squonk2-viz-app Express server listens on.
-# See the viz-app Dockerfile: 'ENV PORT=3000' / 'EXPOSE 3000'.
-_CONTAINER_PORT: int = 3000
-_PORT_NAME: str = "3000-tcp"
+_CONTAINER_PORT: int = 5170
+_PORT_NAME: str = "5170-tcp"
 
 # Where the Data Manager Project PVC is mounted inside the container.
 # The viz-app requires DM_PROJECT_DIR to be set to this path (it exits at
