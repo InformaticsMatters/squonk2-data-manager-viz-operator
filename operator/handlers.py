@@ -44,7 +44,12 @@ _PORT_NAME: str = "3000-tcp"
 _PROJECT_MOUNT_PATH: str = "/project"
 
 # Some (key) default deployment variables...
-_DEFAULT_IMAGE: str = "ghcr.io/informaticsmatters/squonk2-viz-app:0.1.4"
+#
+# The container image *repository* (without a tag). The tag is supplied
+# per-instance by the Data Manager via 'spec.imDataManager.imageTag'; this
+# default can be overridden by the SVO_IMAGE environment variable (see
+# _get_default_image).
+_DEFAULT_IMAGE: str = "ghcr.io/informaticsmatters/squonk2-viz-app"
 _DEFAULT_SA: str = "default"
 _DEFAULT_CPU_LIMIT: str = "1"
 _DEFAULT_CPU_REQUEST: str = "10m"
@@ -52,9 +57,29 @@ _DEFAULT_MEM_LIMIT: str = "1Gi"
 _DEFAULT_MEM_REQUEST: str = "256Mi"
 _DEFAULT_USER_ID: int = 1000
 _DEFAULT_GROUP_ID: int = 100
-_DEFAULT_INGRESS_PROXY_BODY_SIZE: str = "500m"
-# The ingress class
+_DEFAULT_INGRESS_PROXY_BODY_SIZE: str = "1m"
+# The ingress class (overridable by SVO_INGRESS_CLASS; see
+# _get_default_ingress_class).
 _DEFAULT_INGRESS_CLASS: str = "nginx"
+
+
+def _get_default_image() -> str:
+    """The default container image repository (without a tag).
+
+    Defaults to the public viz-app repository but can be replaced by the
+    SVO_IMAGE environment variable (e.g. to use a private registry mirror).
+    """
+    return os.environ.get("SVO_IMAGE", _DEFAULT_IMAGE)
+
+
+def _get_default_ingress_class() -> str:
+    """The default ingress class.
+
+    Defaults to 'nginx' but can be replaced by the SVO_INGRESS_CLASS
+    environment variable. The user can still override it per-instance via the
+    custom resource.
+    """
+    return os.environ.get("SVO_INGRESS_CLASS", _DEFAULT_INGRESS_CLASS)
 
 
 def _get_default_ingress_domain() -> str:
@@ -115,6 +140,21 @@ def _get_image_pull_secrets() -> List[str]:
     """
     name = os.environ.get("SVO_IMAGE_PULL_SECRET")
     return [name] if name else []
+
+
+def build_image(*, image: str, image_tag: Optional[str]) -> str:
+    """Combine the image repository and tag into a full image reference.
+
+    The Data Manager supplies the tag via 'spec.imDataManager.imageTag'. It is
+    mandatory: its absence is an unrecoverable error, so we raise a kopf
+    PermanentError (which stops the operator retrying) rather than guessing a
+    tag.
+    """
+    if not image_tag:
+        raise kopf.PermanentError(
+            "spec.imDataManager.imageTag is required but was not provided"
+        )
+    return f"{image}:{image_tag}"
 
 
 def image_pull_policy_for(image: str) -> str:
@@ -388,7 +428,9 @@ def create(spec: Dict[str, Any], name: str, namespace: str, **_: Any) -> Dict[st
     # All Data-Manager provided material is namespaced under 'imDataManager'.
     material: Dict[str, Any] = spec.get("imDataManager", {})
 
-    image = material.get("image", _DEFAULT_IMAGE)
+    # The Data Manager provides only the image *tag* (e.g. '0.1.4'); the
+    # repository is operator configuration. A missing tag is unrecoverable.
+    image = build_image(image=_get_default_image(), image_tag=material.get("imageTag"))
     image_pull_policy = image_pull_policy_for(image)
 
     service_account = material.get("serviceAccountName", _DEFAULT_SA)
@@ -419,7 +461,7 @@ def create(spec: Dict[str, Any], name: str, namespace: str, **_: Any) -> Dict[st
     ingress_proxy_body_size = material.get(
         "ingressProxyBodySize", _DEFAULT_INGRESS_PROXY_BODY_SIZE
     )
-    ingress_class = material.get("ingressClass", _DEFAULT_INGRESS_CLASS)
+    ingress_class = material.get("ingressClass", _get_default_ingress_class())
     ingress_domain = material.get("ingressDomain", _get_default_ingress_domain())
     ingress_tls_secret = material.get(
         "ingressTlsSecret", _get_default_ingress_tls_secret()

@@ -11,6 +11,7 @@ import os
 import sys
 from typing import Any, Dict, List
 
+import kopf
 import pytest
 
 # Make 'operator/handlers.py' importable.
@@ -51,6 +52,47 @@ def _example_deployment(**overrides: Any) -> Dict[str, Any]:
     }
     kwargs.update(overrides)
     return handlers.build_deployment_body(**kwargs)
+
+
+# --- image ------------------------------------------------------------------
+
+
+def test_build_image_combines_repository_and_tag() -> None:
+    assert (
+        handlers.build_image(
+            image="ghcr.io/informaticsmatters/squonk2-viz-app", image_tag="0.1.4"
+        )
+        == "ghcr.io/informaticsmatters/squonk2-viz-app:0.1.4"
+    )
+
+
+def test_build_image_without_tag_is_a_permanent_error() -> None:
+    # A missing imageTag is unrecoverable - the operator must not retry.
+    with pytest.raises(kopf.PermanentError):
+        handlers.build_image(
+            image="ghcr.io/informaticsmatters/squonk2-viz-app", image_tag=None
+        )
+
+
+def test_build_image_with_empty_tag_is_a_permanent_error() -> None:
+    with pytest.raises(kopf.PermanentError):
+        handlers.build_image(
+            image="ghcr.io/informaticsmatters/squonk2-viz-app", image_tag=""
+        )
+
+
+def test_default_image_falls_back_to_the_constant(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("SVO_IMAGE", raising=False)
+    assert handlers._get_default_image() == handlers._DEFAULT_IMAGE
+
+
+def test_default_image_is_overridden_by_svo_image(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SVO_IMAGE", "registry.example.com/viz-app")
+    assert handlers._get_default_image() == "registry.example.com/viz-app"
 
 
 # --- image pull policy ------------------------------------------------------
@@ -257,3 +299,24 @@ def test_build_ingress_body_uses_cert_manager_without_tls_secret() -> None:
     )
     annotations = body["metadata"]["annotations"]
     assert annotations["cert-manager.io/cluster-issuer"] == "letsencrypt"
+
+
+# --- ingress config ---------------------------------------------------------
+
+
+def test_default_ingress_proxy_body_size_is_one_megabyte() -> None:
+    assert handlers._DEFAULT_INGRESS_PROXY_BODY_SIZE == "1m"
+
+
+def test_default_ingress_class_falls_back_to_the_constant(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("SVO_INGRESS_CLASS", raising=False)
+    assert handlers._get_default_ingress_class() == handlers._DEFAULT_INGRESS_CLASS
+
+
+def test_default_ingress_class_is_overridden_by_svo_ingress_class(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SVO_INGRESS_CLASS", "traefik")
+    assert handlers._get_default_ingress_class() == "traefik"
