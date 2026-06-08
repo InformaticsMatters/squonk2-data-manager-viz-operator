@@ -162,6 +162,22 @@ a specific tag: -
   `kubernetes` PyPI package the operator is built against (currently `35`,
   for Kubernetes 1.35).
 
+## Cutting a release
+
+Releases are cut from the latest `main` as a Git **tag**, which triggers the
+`build-tag` workflow to build and push the image. The repository ships a
+Claude Code `release` skill (`.claude/skills/release/`) that automates this:
+it refuses to release when CI has failed, enforces that the release **major**
+matches the pinned `kubernetes` package, and supports semver pre-releases —
+`alpha`, `beta` and `rc` (each numbered from `1`, e.g. `35.0.0-alpha.1`, and
+marked as a GitHub _Pre-release_) — as well as full releases.
+
+The pure numbering logic lives in `.claude/skills/release/next_release.py` and
+is unit tested (`tests/test_release.py`); it can also be run directly: -
+
+    python .claude/skills/release/next_release.py next \
+      --channel alpha --requirements operator/requirements.txt
+
 # Data Manager Application Compliance
 
 In order to expose the CRD as an _Application_ in the Data Manager API service
