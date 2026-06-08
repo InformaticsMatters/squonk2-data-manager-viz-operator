@@ -22,9 +22,17 @@ creates a custom resource and this operator responds by creating a Kubernetes
 **Deployment**, **Service** and **Ingress** that run the
 [squonk2-viz-app] container image.
 
-By default, the operator creates instances using the image: -
+The Data Manager supplies only the image **tag** (via
+`spec.imDataManager.imageTag`); the operator combines it with the image
+repository it is configured with: -
 
-- `ghcr.io/informaticsmatters/squonk2-viz-app:0.1.4` (see `operator/handlers.py`)
+- `ghcr.io/informaticsmatters/squonk2-viz-app` (see `operator/handlers.py`,
+  overridable with the `SVO_IMAGE` environment variable)
+
+So, given an `imageTag` of `0.1.4`, the operator runs
+`ghcr.io/informaticsmatters/squonk2-viz-app:0.1.4`. The `imageTag` is
+**required** — if it is missing the operator treats the resource as an
+unrecoverable error and does not retry.
 
 ## The Custom Resource
 
@@ -35,8 +43,9 @@ The operator watches for the following Custom Resource: -
 - **Kind**: `DataVisualisation` (plural `datavisualisations`)
 
 Data-Manager-provided material is namespaced under the `imDataManager` property
-of the resource `spec`. Recognised properties (all optional, with operator
-defaults) include `image`, `serviceAccountName`, `resources`,
+of the resource `spec`. The only **required** property is `imageTag` (the
+container image tag, e.g. `0.1.4`). The remaining properties are optional, with
+operator defaults, and include `serviceAccountName`, `resources`,
 `securityContext` (`runAsUser`, `runAsGroup`), `project` (`claimName`, `id`),
 `ingressClass`, `ingressDomain`, `ingressTlsSecret`, `ingressProxyBodySize`,
 `imagePullSecrets` (a list of Secret names) and `labels` (a list of
@@ -70,6 +79,8 @@ variables are prefixed `SVO_` (Squonk2 Viz Operator): -
 | `INGRESS_DOMAIN` | _(required)_ | Default ingress host for instances |
 | `INGRESS_TLS_SECRET` | _(unset)_ | Default TLS secret; if unset, cert-manager is used |
 | `INGRESS_CERT_ISSUER` | _(unset)_ | cert-manager cluster issuer (when no TLS secret) |
+| `SVO_IMAGE` | `ghcr.io/informaticsmatters/squonk2-viz-app` | Image repository (the tag comes from `imageTag`) |
+| `SVO_INGRESS_CLASS` | `nginx` | Default ingress class for instances |
 | `SVO_IMAGE_PULL_SECRET` | _(unset)_ | Name of a `dockerconfigjson` Secret for the (private) image registry |
 | `SVO_POD_NODE_SELECTOR_KEY` | `informaticsmatters.com/purpose-application` | Pod node-selector key |
 | `SVO_POD_NODE_SELECTOR_VALUE` | `yes` | Pod node-selector value |
