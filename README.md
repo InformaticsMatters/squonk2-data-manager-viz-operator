@@ -1,5 +1,8 @@
 # A Visualisation Application Operator (for the Data Manager API)
 
+[![release](https://img.shields.io/github/v/release/informaticsmatters/squonk2-data-manager-viz-operator?sort=semver&label=release)](https://github.com/informaticsmatters/squonk2-data-manager-viz-operator/releases/latest)
+[![latest (incl. pre-release)](https://img.shields.io/github/v/release/informaticsmatters/squonk2-data-manager-viz-operator?include_prereleases&sort=semver&label=latest)](https://github.com/informaticsmatters/squonk2-data-manager-viz-operator/releases)
+
 [![Data Manager: Application](https://img.shields.io/badge/squonk2%20data%20manager-application-000000?labelColor=dc332e)]()
 [![Dev Stage: 1](https://img.shields.io/badge/dev%20stage-★☆☆%20%281%29-000000?labelColor=dc332e)](https://github.com/InformaticsMatters/code-repository-development-stages)
 
