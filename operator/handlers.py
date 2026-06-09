@@ -178,13 +178,22 @@ def build_environment(
 
     DM_PROJECT_DIR is mandatory (the app exits without it); the remaining DM_*
     variables provide instance metadata.
+
+    When an instance id is known we also set DM_BASE_PATH to '/<instance-id>'.
+    The viz-app uses this to serve under the Ingress sub-path (its assets,
+    client-side routes and API calls are then resolved relative to the prefix);
+    without it the app would serve from '/' and render a blank page behind the
+    path-based Ingress. It is omitted when no instance id is available.
     """
-    return [
+    env: List[Dict[str, str]] = [
         {"name": "DM_PROJECT_DIR", "value": project_mount_path},
         {"name": "DM_PROJECT_ID", "value": str(project_id)},
         {"name": "DM_INSTANCE_ID", "value": str(instance_id)},
         {"name": "DM_INSTANCE_OWNER", "value": str(instance_owner)},
     ]
+    if instance_id:
+        env.append({"name": "DM_BASE_PATH", "value": f"/{instance_id}"})
+    return env
 
 
 def build_deployment_body(

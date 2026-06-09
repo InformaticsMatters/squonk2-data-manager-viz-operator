@@ -132,6 +132,27 @@ def test_build_environment_exposes_dm_metadata() -> None:
     assert by_name["DM_INSTANCE_OWNER"] == "dlister"
 
 
+def test_build_environment_sets_dm_base_path_from_instance_id() -> None:
+    # The viz-app serves under a sub-path when DM_BASE_PATH is set; the operator
+    # mirrors the instance id (prefixed with '/') so assets, client-side routes
+    # and API calls resolve under the Ingress prefix.
+    env = _example_environment()
+    by_name = {item["name"]: item["value"] for item in env}
+    assert by_name["DM_BASE_PATH"] == "/instance-111"
+
+
+def test_build_environment_omits_dm_base_path_when_instance_id_absent() -> None:
+    # Without an instance id there is no sub-path; the app then serves at '/'.
+    env = handlers.build_environment(
+        project_id="project-000",
+        instance_id="",
+        instance_owner="dlister",
+        project_mount_path=PROJECT_MOUNT_PATH,
+    )
+    by_name = {item["name"]: item["value"] for item in env}
+    assert "DM_BASE_PATH" not in by_name
+
+
 # --- service ----------------------------------------------------------------
 
 
