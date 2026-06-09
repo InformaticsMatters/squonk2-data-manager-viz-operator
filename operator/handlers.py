@@ -386,6 +386,41 @@ def build_ingress_body(
     return ingress_body
 
 
+def build_status(
+    *,
+    url: str,
+    image: str,
+    service_account: str,
+    memory_request: str,
+    memory_limit: str,
+    project_claim_name: str,
+    project_id: str,
+) -> Dict[str, Any]:
+    """Build the value kopf writes to the custom resource's status.
+
+    The ``create`` handler is registered with ``id="viz"``, so kopf nests this
+    return value under ``status.viz``. The CRD carries the annotation
+    ``data-manager.informaticsmatters.com/application-url-location: viz.url``,
+    and the Data Manager extracts the application URL from the ``status``-
+    relative path it names, i.e. ``custom_resource['status']['viz']['url']``.
+
+    For those to agree, ``url`` MUST be a *top-level* key here (giving
+    ``status.viz.url``). Nesting it as ``{"viz": {"url": ...}}`` would put it at
+    ``status.viz.viz.url``, where the Data Manager never looks, so it would
+    never see the URL within its grace period.
+    """
+    return {
+        "url": url,
+        "image": image,
+        "serviceAccountName": service_account,
+        "resources": {
+            "requests": {"memory": memory_request},
+            "limits": {"memory": memory_limit},
+        },
+        "project": {"claimName": project_claim_name, "id": project_id},
+    }
+
+
 def _create_ignoring_conflict(create_call: Any, description: str) -> None:
     """Create a Kubernetes object, tolerating a 409/Conflict.
 
@@ -579,13 +614,16 @@ def create(spec: Dict[str, Any], name: str, namespace: str, **_: Any) -> Dict[st
     url = f"https://{ingress_domain}{ingress_path}"
     logging.info("Done %s (namespace=%s url=%s)", name, namespace, url)
 
-    return {
-        "viz": {"url": url},
-        "image": image,
-        "serviceAccountName": service_account,
-        "resources": {
-            "requests": {"memory": memory_request},
-            "limits": {"memory": memory_limit},
-        },
-        "project": {"claimName": project_claim_name, "id": project_id},
-    }
+    # The returned dict is nested by kopf under 'status.viz' (the handler id).
+    # 'url' is a top-level key so the URL lands at 'status.viz.url', matching
+    # the CRD's 'application-url-location: viz.url' annotation that the Data
+    # Manager reads. See build_status for the full rationale.
+    return build_status(
+        url=url,
+        image=image,
+        service_account=service_account,
+        memory_request=memory_request,
+        memory_limit=memory_limit,
+        project_claim_name=project_claim_name,
+        project_id=project_id,
+    )

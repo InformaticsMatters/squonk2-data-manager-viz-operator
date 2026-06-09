@@ -341,3 +341,59 @@ def test_default_ingress_class_is_overridden_by_svo_ingress_class(
 ) -> None:
     monkeypatch.setenv("SVO_INGRESS_CLASS", "traefik")
     assert handlers._get_default_ingress_class() == "traefik"
+
+
+# --- status / application URL location --------------------------------------
+
+# The CRD carries the annotation
+# 'data-manager.informaticsmatters.com/application-url-location: viz.url'.
+# The Data Manager reads the URL from the 'status'-relative path it names, i.e.
+# custom_resource['status']['viz']['url']. The create handler has id='viz', so
+# kopf nests its return value under 'status.viz'; therefore 'url' MUST be a
+# top-level key of the returned dict for the two to line up.
+APPLICATION_URL_LOCATION = "viz.url"
+
+
+def _example_status(**overrides: Any) -> Dict[str, Any]:
+    kwargs: Dict[str, Any] = {
+        "url": "https://example.com/viz-abcdef",
+        "image": "ghcr.io/informaticsmatters/squonk2-viz-app:0.1.4",
+        "service_account": "default",
+        "memory_request": "256Mi",
+        "memory_limit": "1Gi",
+        "project_claim_name": "claim-1",
+        "project_id": "project-000",
+    }
+    kwargs.update(overrides)
+    return handlers.build_status(**kwargs)
+
+
+def test_build_status_places_url_at_the_annotated_location() -> None:
+    # Reproduces the reporting bug: the URL must be reachable at the path named
+    # by the CRD's 'application-url-location' annotation once kopf has nested
+    # the handler's return value under 'status.<handler-id>' ('status.viz').
+    handler_id = "viz"
+    status = {handler_id: _example_status(url="https://example.com/viz-abcdef")}
+
+    cursor: Any = status
+    for key in APPLICATION_URL_LOCATION.split("."):
+        cursor = cursor[key]
+    assert cursor == "https://example.com/viz-abcdef"
+
+
+def test_build_status_does_not_double_nest_under_viz() -> None:
+    # Guard against the regression where the URL was returned as
+    # {'viz': {'url': ...}}, landing at status.viz.viz.url and so invisible to
+    # the Data Manager (which only looks at status.viz.url).
+    status = _example_status()
+    assert "viz" not in status
+    assert status["url"] == "https://example.com/viz-abcdef"
+
+
+def test_build_status_reports_instance_metadata() -> None:
+    status = _example_status()
+    assert status["image"] == "ghcr.io/informaticsmatters/squonk2-viz-app:0.1.4"
+    assert status["serviceAccountName"] == "default"
+    assert status["resources"]["requests"]["memory"] == "256Mi"
+    assert status["resources"]["limits"]["memory"] == "1Gi"
+    assert status["project"] == {"claimName": "claim-1", "id": "project-000"}
