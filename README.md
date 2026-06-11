@@ -37,6 +37,24 @@ So, given an `imageTag` of `0.1.4`, the operator runs
 **required** — if it is missing the operator treats the resource as an
 unrecoverable error and does not retry.
 
+## Related repositories
+
+This operator sits between two related repositories: -
+
+- **Upstream** — [squonk2-viz-app]: the container image
+  (`ghcr.io/informaticsmatters/squonk2-viz-app`) that the operator runs for
+  each `DataVisualisation` instance. Changes to the app's runtime contract
+  (its port, required `DM_*` environment variables and Project volume) drive
+  the behaviour of this operator.
+- **Downstream** — [squonk2-data-manager-viz-operator-ansible]: the Ansible
+  role/playbook that **deploys** this operator (and its CRD, RBAC and `SVO_`
+  configuration) into a Kubernetes cluster. It consumes the operator image
+  published from this repository.
+
+It also follows the same pattern as the sibling
+[squonk2-data-manager-jupyter-operator] — consult that repo when a behaviour
+here is unclear.
+
 ## The Custom Resource
 
 The operator watches for the following Custom Resource: -
@@ -241,4 +259,6 @@ These provide the Project PVC and sub-path mounted at `/project`.
 [kubernetes]: https://pypi.org/project/kubernetes/
 [pre-commit]: https://pre-commit.com
 [squonk2 jupyter operator]: https://github.com/InformaticsMatters/squonk2-data-manager-jupyter-operator
+[squonk2-data-manager-jupyter-operator]: https://github.com/InformaticsMatters/squonk2-data-manager-jupyter-operator
+[squonk2-data-manager-viz-operator-ansible]: https://github.com/InformaticsMatters/squonk2-data-manager-viz-operator-ansible
 [squonk2-viz-app]: https://github.com/InformaticsMatters/squonk2-viz-app
