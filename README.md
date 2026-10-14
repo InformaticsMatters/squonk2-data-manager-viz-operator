@@ -164,6 +164,16 @@ runtime requirements and run them with `pytest`: -
     pip install -r operator/requirements.txt -r build-requirements.txt
     pytest
 
+The project-database tests in `tests/test_datacentre_pg.py` need a Postgres
+with the RDKit cartridge, and are skipped without one: -
+
+    docker run -d --rm --name svo-dc-test -e POSTGRES_PASSWORD=svo-test \
+        -p 127.0.0.1:55432:5432 \
+        informaticsmatters/rdkit-cartridge-debian:Release_2024_03_3
+    SVO_TEST_PG_URL=postgresql://postgres:svo-test@127.0.0.1:55432/postgres pytest
+
+CI runs them against the same image.
+
 ## Building the operator (local development)
 
 Pre-requisites: -
@@ -249,6 +259,39 @@ To place Data-Manager Project files the **CRD** must expose: -
 - `spec.imDataManager.project.id`
 
 These provide the Project PVC and sub-path mounted at `/project`.
+
+## Project database (data centre)
+
+Optionally the **CRD** carries `spec.imDataManager.dataCentre`, naming a
+Postgres database (with the RDKit cartridge available) that already exists -
+it is created by the Account Server, not here: -
+
+| Property | Required | Default | What it is |
+|---|---|---|---|
+| `host` | yes | | The database server |
+| `port` | | `5432` | |
+| `ssl` | | `false` | Connect (and tell the Pod to connect) over TLS |
+| `database` | yes | | The (organisation's) database |
+| `adminUser` | yes | | A **superuser** - `rdkit` is not a trusted extension |
+| `adminPassword` | yes | | Masked when the operator logs the spec |
+| `limits.statementTimeout` | | `60` | Seconds, set on the project's role |
+| `limits.tempFileLimitMB` | | `2048` | Set on the project's role |
+| `limits.connectionLimit` | | `8` | Set on the project's role |
+
+When it is present the operator, before creating anything else, connects as
+the admin and idempotently ensures the `rdkit` extension, revokes `CONNECT`
+on the database from `PUBLIC`, and ensures role `u_<key>` (with the limits,
+`CONNECT` on this database only and a `search_path` of its schema) and schema
+`p_<key>` owned by it. `<key>` is the project id (`project-<uuid>`) reduced to
+lowercase hex. The role's password is derived -
+`base64url(HMAC-SHA256(adminPassword, key))` - and set on every launch, so
+every instance of a project uses the same one and nothing is stored.
+
+The Pod is then given `DATA_CENTRE_PG_HOST`, `_PORT`, `_DATABASE`, `_SCHEMA`,
+`_ROLE`, `_SECRET` (and `_SSL=true`). If the database cannot be reached or
+prepared the launch is retried, and no Deployment is created until it
+succeeds. Without the block none of this happens and the Pod's Data API
+answers 503. Nothing is removed when an instance (or project) is deleted.
 
 ---
 
