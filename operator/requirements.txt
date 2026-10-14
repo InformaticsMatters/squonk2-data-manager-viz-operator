@@ -1,2 +1,3 @@
 kopf == 1.40.1
 kubernetes == 35.0.0
+psycopg[binary] == 3.2.10

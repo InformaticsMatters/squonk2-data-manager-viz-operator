@@ -19,6 +19,8 @@ from typing import Any, Dict, List, Optional
 import kubernetes
 import kopf
 
+import datacentre
+
 # Configuration of underlying API requests.
 #
 # Request timeout (from the Python Kubernetes API).
@@ -466,7 +468,8 @@ def create(spec: Dict[str, Any], name: str, namespace: str, **_: Any) -> Dict[st
     corresponding Kubernetes API to create them.
     """
     logging.info("Creating %s (namespace=%s)...", name, namespace)
-    logging.info("Incoming %s spec=%s", name, spec)
+    # The spec may carry the database admin's password (dataCentre).
+    logging.info("Incoming %s spec=%s", name, datacentre.redact_spec(spec))
 
     # All Data-Manager provided material is namespaced under 'imDataManager'.
     material: Dict[str, Any] = spec.get("imDataManager", {})
@@ -541,6 +544,24 @@ def create(spec: Dict[str, Any], name: str, namespace: str, **_: Any) -> Dict[st
         instance_owner=instance_owner,
         project_mount_path=_PROJECT_MOUNT_PATH,
     )
+
+    # Project database (optional)
+    # ---------------------------
+    # When the Data Manager supplies a 'dataCentre' block, ensure the project's
+    # role and schema exist before anything is created, so a Pod never starts
+    # without them (the viz-app refuses to start with only some DATA_CENTRE_PG_*
+    # variables). Failures are kopf.TemporaryErrors and are retried.
+    data_centre = datacentre.parse_data_centre(material)
+    if data_centre:
+        project_db = datacentre.project_database(data_centre, project_id)
+        logging.info(
+            "Ensuring %s in database %s for %s...",
+            project_db.schema,
+            data_centre.database,
+            name,
+        )
+        datacentre.ensure_project_database(data_centre, project_db)
+        env.extend(datacentre.build_data_centre_environment(data_centre, project_db))
 
     apps_api = kubernetes.client.AppsV1Api()
     core_api = kubernetes.client.CoreV1Api()
