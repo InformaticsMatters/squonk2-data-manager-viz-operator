@@ -325,8 +325,8 @@ def test_build_ingress_body_uses_cert_manager_without_tls_secret() -> None:
 # --- ingress config ---------------------------------------------------------
 
 
-def test_default_ingress_proxy_body_size_is_one_megabyte() -> None:
-    assert handlers._DEFAULT_INGRESS_PROXY_BODY_SIZE == "1m"
+def test_default_ingress_proxy_body_size_is_500_megabytes() -> None:
+    assert handlers._DEFAULT_INGRESS_PROXY_BODY_SIZE == "500m"
 
 
 def test_default_ingress_class_falls_back_to_the_constant(

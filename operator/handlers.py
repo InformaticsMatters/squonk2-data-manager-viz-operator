@@ -58,7 +58,7 @@ _DEFAULT_MEM_LIMIT: str = "1Gi"
 _DEFAULT_MEM_REQUEST: str = "256Mi"
 _DEFAULT_USER_ID: int = 1000
 _DEFAULT_GROUP_ID: int = 100
-_DEFAULT_INGRESS_PROXY_BODY_SIZE: str = "1m"
+_DEFAULT_INGRESS_PROXY_BODY_SIZE: str = "500m"
 # The ingress class (overridable by SVO_INGRESS_CLASS; see
 # _get_default_ingress_class).
 _DEFAULT_INGRESS_CLASS: str = "nginx"
