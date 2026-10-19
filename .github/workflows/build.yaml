@@ -27,20 +27,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # A Postgres with the RDKit cartridge, for the project-database
-    # integration tests (tests/test_datacentre_pg.py).
-    services:
-      postgres:
-        image: informaticsmatters/rdkit-cartridge-debian:Release_2024_03_3
-        env:
-          POSTGRES_PASSWORD: svo-test
-        ports:
-        - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
     steps:
     - name: Checkout
       uses: actions/checkout@v6
@@ -57,8 +43,6 @@ jobs:
       run: |
         pre-commit run --all-files
     - name: Test
-      env:
-        SVO_TEST_PG_URL: postgresql://postgres:svo-test@localhost:5432/postgres
       run: |
         pytest
     - name: Set up QEMU

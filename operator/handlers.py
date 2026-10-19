@@ -547,21 +547,11 @@ def create(spec: Dict[str, Any], name: str, namespace: str, **_: Any) -> Dict[st
 
     # Project database (optional)
     # ---------------------------
-    # When the Data Manager supplies a 'dataCentre' block, ensure the project's
-    # role and schema exist before anything is created, so a Pod never starts
-    # without them (the viz-app refuses to start with only some DATA_CENTRE_PG_*
-    # variables). Failures are kopf.TemporaryErrors and are retried.
+    # When the Data Manager supplies a 'dataCentre' block (the project's
+    # credentials, provisioned by the Account Server) pass it to the Pod.
     data_centre = datacentre.parse_data_centre(material)
     if data_centre:
-        project_db = datacentre.project_database(data_centre, project_id)
-        logging.info(
-            "Ensuring %s in database %s for %s...",
-            project_db.schema,
-            data_centre.database,
-            name,
-        )
-        datacentre.ensure_project_database(data_centre, project_db)
-        env.extend(datacentre.build_data_centre_environment(data_centre, project_db))
+        env.extend(datacentre.build_data_centre_environment(data_centre))
 
     apps_api = kubernetes.client.AppsV1Api()
     core_api = kubernetes.client.CoreV1Api()
