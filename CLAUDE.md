@@ -50,6 +50,9 @@ that repo when a behaviour here is unclear.
   pre-existing pull Secret **by name** (`SVO_IMAGE_PULL_SECRET`, or per-instance
   `spec.imDataManager.imagePullSecrets`). The operator never handles registry
   credentials; the Secret is provisioned per namespace out-of-band.
+- The viz container's CPU and memory requests and limits are **fixed** in
+  `handlers.py` (`_CPU_*`, `_MEM_*`). They are not user-definable, and
+  `spec.imDataManager.resources` is ignored (squonk2-viz-components#468).
 - The operator image tag's **major** version tracks the `kubernetes` PyPI
   package major (currently `35`, for Kubernetes 1.35).
 

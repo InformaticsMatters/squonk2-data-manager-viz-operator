@@ -66,11 +66,17 @@ The operator watches for the following Custom Resource: -
 Data-Manager-provided material is namespaced under the `imDataManager` property
 of the resource `spec`. The only **required** property is `imageTag` (the
 container image tag, e.g. `0.1.4`). The remaining properties are optional, with
-operator defaults, and include `serviceAccountName`, `resources`,
+operator defaults, and include `serviceAccountName`,
 `securityContext` (`runAsUser`, `runAsGroup`), `project` (`claimName`, `id`),
 `ingressClass`, `ingressDomain`, `ingressTlsSecret`, `ingressProxyBodySize`,
 `imagePullSecrets` (a list of Secret names) and `labels` (a list of
 `key=value` strings).
+
+The operator fixes the viz container's resource requests and limits.
+The CPU request is `100m` and the limit is `1`.
+The memory request is `256Mi` and the limit is `512Mi`.
+They are not user-definable, and the operator ignores any `resources`
+property (see [squonk2-viz-components#468]).
 
 ## The Pod environment and Project volume
 
@@ -297,3 +303,4 @@ and no Deployment is created. Without the block the Pod's Data API answers
 [squonk2-data-manager-jupyter-operator]: https://github.com/InformaticsMatters/squonk2-data-manager-jupyter-operator
 [squonk2-data-manager-viz-operator-ansible]: https://github.com/InformaticsMatters/squonk2-data-manager-viz-operator-ansible
 [squonk2-viz-app]: https://github.com/InformaticsMatters/squonk2-viz-app
+[squonk2-viz-components#468]: https://github.com/InformaticsMatters/squonk2-viz-components/issues/468

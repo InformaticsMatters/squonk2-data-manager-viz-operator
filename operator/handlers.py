@@ -44,6 +44,16 @@ _PORT_NAME: str = "5170-tcp"
 # variables; without them the Pod would crash-loop.
 _PROJECT_MOUNT_PATH: str = "/project"
 
+# The viz container's resource requests and limits.
+#
+# These are fixed by the operator (see squonk2-viz-components issue #468).
+# They are not user-definable: the Data Manager template does not offer them
+# and any 'spec.imDataManager.resources' block is ignored.
+_CPU_REQUEST: str = "100m"
+_CPU_LIMIT: str = "1"
+_MEM_REQUEST: str = "256Mi"
+_MEM_LIMIT: str = "512Mi"
+
 # Some (key) default deployment variables...
 #
 # The container image *repository* (without a tag). The tag is supplied
@@ -52,10 +62,6 @@ _PROJECT_MOUNT_PATH: str = "/project"
 # _get_default_image).
 _DEFAULT_IMAGE: str = "ghcr.io/informaticsmatters/squonk2-viz-app"
 _DEFAULT_SA: str = "default"
-_DEFAULT_CPU_LIMIT: str = "1"
-_DEFAULT_CPU_REQUEST: str = "10m"
-_DEFAULT_MEM_LIMIT: str = "1Gi"
-_DEFAULT_MEM_REQUEST: str = "256Mi"
 _DEFAULT_USER_ID: int = 1000
 _DEFAULT_GROUP_ID: int = 100
 _DEFAULT_INGRESS_PROXY_BODY_SIZE: str = "500m"
@@ -204,10 +210,6 @@ def build_deployment_body(
     image: str,
     image_pull_policy: str,
     service_account: str,
-    cpu_request: str,
-    cpu_limit: str,
-    memory_request: str,
-    memory_limit: str,
     run_as_user: int,
     run_as_group: int,
     project_claim_name: str,
@@ -224,6 +226,7 @@ def build_deployment_body(
     A single replica runs the viz-app container with the Project PVC mounted at
     ``project_mount_path`` (the same path advertised via DM_PROJECT_DIR). The
     'Recreate' strategy avoids two Pods briefly sharing the Project volume.
+    The container's resource requests and limits are fixed by the operator.
     """
     deployment_body: Dict[str, Any] = {
         "apiVersion": "apps/v1",
@@ -245,12 +248,12 @@ def build_deployment_body(
                             "imagePullPolicy": image_pull_policy,
                             "resources": {
                                 "requests": {
-                                    "memory": memory_request,
-                                    "cpu": cpu_request,
+                                    "memory": _MEM_REQUEST,
+                                    "cpu": _CPU_REQUEST,
                                 },
                                 "limits": {
-                                    "memory": memory_limit,
-                                    "cpu": cpu_limit,
+                                    "memory": _MEM_LIMIT,
+                                    "cpu": _CPU_LIMIT,
                                 },
                             },
                             "ports": [
@@ -393,8 +396,6 @@ def build_status(
     url: str,
     image: str,
     service_account: str,
-    memory_request: str,
-    memory_limit: str,
     project_claim_name: str,
     project_id: str,
 ) -> Dict[str, Any]:
@@ -416,8 +417,8 @@ def build_status(
         "image": image,
         "serviceAccountName": service_account,
         "resources": {
-            "requests": {"memory": memory_request},
-            "limits": {"memory": memory_limit},
+            "requests": {"memory": _MEM_REQUEST},
+            "limits": {"memory": _MEM_LIMIT},
         },
         "project": {"claimName": project_claim_name, "id": project_id},
     }
@@ -481,11 +482,8 @@ def create(spec: Dict[str, Any], name: str, namespace: str, **_: Any) -> Dict[st
 
     service_account = material.get("serviceAccountName", _DEFAULT_SA)
 
-    resources = material.get("resources", {})
-    cpu_limit = resources.get("limits", {}).get("cpu", _DEFAULT_CPU_LIMIT)
-    cpu_request = resources.get("requests", {}).get("cpu", _DEFAULT_CPU_REQUEST)
-    memory_limit = resources.get("limits", {}).get("memory", _DEFAULT_MEM_LIMIT)
-    memory_request = resources.get("requests", {}).get("memory", _DEFAULT_MEM_REQUEST)
+    # NB: We deliberately ignore any 'resources' in the material.
+    # The operator fixes the container's requests and limits.
 
     # Data Manager API compliance.
     #
@@ -565,10 +563,6 @@ def create(spec: Dict[str, Any], name: str, namespace: str, **_: Any) -> Dict[st
         image=image,
         image_pull_policy=image_pull_policy,
         service_account=service_account,
-        cpu_request=cpu_request,
-        cpu_limit=cpu_limit,
-        memory_request=memory_request,
-        memory_limit=memory_limit,
         run_as_user=sc_run_as_user,
         run_as_group=sc_run_as_group,
         project_claim_name=project_claim_name,
@@ -633,8 +627,6 @@ def create(spec: Dict[str, Any], name: str, namespace: str, **_: Any) -> Dict[st
         url=url,
         image=image,
         service_account=service_account,
-        memory_request=memory_request,
-        memory_limit=memory_limit,
         project_claim_name=project_claim_name,
         project_id=project_id,
     )

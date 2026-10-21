@@ -38,10 +38,6 @@ def _example_deployment(**overrides: Any) -> Dict[str, Any]:
         "image": "ghcr.io/informaticsmatters/squonk2-viz-app:0.1.4",
         "image_pull_policy": "IfNotPresent",
         "service_account": "default",
-        "cpu_request": "10m",
-        "cpu_limit": "1",
-        "memory_request": "256Mi",
-        "memory_limit": "1Gi",
         "run_as_user": 1000,
         "run_as_group": 100,
         "project_claim_name": "claim-1",
@@ -213,11 +209,21 @@ def test_build_deployment_body_sets_security_context() -> None:
     assert sec["fsGroup"] == 100
 
 
-def test_build_deployment_body_applies_resources() -> None:
+def test_build_deployment_body_applies_fixed_resources() -> None:
+    # The operator defines the viz Pod's requests and limits (viz-components
+    # issue #468). They are not user-definable.
     container = _example_deployment()["spec"]["template"]["spec"]["containers"][0]
     res = container["resources"]
-    assert res["requests"] == {"memory": "256Mi", "cpu": "10m"}
-    assert res["limits"] == {"memory": "1Gi", "cpu": "1"}
+    assert res["requests"] == {"memory": "256Mi", "cpu": "100m"}
+    assert res["limits"] == {"memory": "512Mi", "cpu": "1"}
+
+
+@pytest.mark.parametrize(
+    "parameter", ["cpu_request", "cpu_limit", "memory_request", "memory_limit"]
+)
+def test_build_deployment_body_does_not_accept_resources(parameter: str) -> None:
+    with pytest.raises(TypeError):
+        _example_deployment(**{parameter: "64Gi"})
 
 
 def test_build_deployment_body_omits_priority_class_by_default() -> None:
@@ -359,8 +365,6 @@ def _example_status(**overrides: Any) -> Dict[str, Any]:
         "url": "https://example.com/viz-abcdef",
         "image": "ghcr.io/informaticsmatters/squonk2-viz-app:0.1.4",
         "service_account": "default",
-        "memory_request": "256Mi",
-        "memory_limit": "1Gi",
         "project_claim_name": "claim-1",
         "project_id": "project-000",
     }
@@ -395,5 +399,5 @@ def test_build_status_reports_instance_metadata() -> None:
     assert status["image"] == "ghcr.io/informaticsmatters/squonk2-viz-app:0.1.4"
     assert status["serviceAccountName"] == "default"
     assert status["resources"]["requests"]["memory"] == "256Mi"
-    assert status["resources"]["limits"]["memory"] == "1Gi"
+    assert status["resources"]["limits"]["memory"] == "512Mi"
     assert status["project"] == {"claimName": "claim-1", "id": "project-000"}
