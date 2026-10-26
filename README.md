@@ -67,7 +67,8 @@ Data-Manager-provided material is namespaced under the `imDataManager` property
 of the resource `spec`. The only **required** property is `imageTag` (the
 container image tag, e.g. `0.1.4`). The remaining properties are optional, with
 operator defaults, and include `serviceAccountName`,
-`securityContext` (`runAsUser`, `runAsGroup`), `project` (`claimName`, `id`),
+`securityContext` (`runAsUser`, `runAsGroup`), `project` (`claimName`, `id`,
+`name`),
 `ingressClass`, `ingressDomain`, `ingressTlsSecret`, `ingressProxyBodySize`,
 `imagePullSecrets` (a list of Secret names) and `labels` (a list of
 `key=value` strings).
@@ -92,6 +93,9 @@ For each instance the operator: -
   `project.id`) at `/project`.
 - Injects the environment variables `DM_PROJECT_DIR` (`/project`),
   `DM_PROJECT_ID`, `DM_INSTANCE_ID` and `DM_INSTANCE_OWNER`.
+- Injects `DM_PROJECT_NAME` when the Data Manager supplies `project.name`.
+  The viz-app shows the name in its app bar and page title
+  (see [squonk2-viz-components#478]).
 
 The viz-app's Express server listens on container port **5170**, which is
 exposed by the Service and routed to by the path-based Ingress.
@@ -255,6 +259,8 @@ To place Data-Manager Project files the **CRD** must expose: -
 - `spec.imDataManager.project.id`
 
 These provide the Project PVC and sub-path mounted at `/project`.
+The CRD can also expose `spec.imDataManager.project.name`.
+The operator passes it to the viz-app as `DM_PROJECT_NAME`.
 
 ## Project database (data centre)
 
@@ -304,3 +310,4 @@ and no Deployment is created. Without the block the Pod's Data API answers
 [squonk2-data-manager-viz-operator-ansible]: https://github.com/InformaticsMatters/squonk2-data-manager-viz-operator-ansible
 [squonk2-viz-app]: https://github.com/InformaticsMatters/squonk2-viz-app
 [squonk2-viz-components#468]: https://github.com/InformaticsMatters/squonk2-viz-components/issues/468
+[squonk2-viz-components#478]: https://github.com/InformaticsMatters/squonk2-viz-components/issues/478

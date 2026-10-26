@@ -181,11 +181,16 @@ def build_environment(
     instance_id: str,
     instance_owner: str,
     project_mount_path: str,
+    project_name: Optional[str] = None,
 ) -> List[Dict[str, str]]:
     """Build the container environment expected by the squonk2-viz-app.
 
     DM_PROJECT_DIR is mandatory (the app exits without it); the remaining DM_*
     variables provide instance metadata.
+
+    DM_PROJECT_NAME is set only when the Data Manager supplies a project name
+    (squonk2-viz-components#478). An older Data Manager does not supply one,
+    and the app then shows no name.
 
     When an instance id is known we also set DM_BASE_PATH to '/<instance-id>'.
     The viz-app uses this to serve under the Ingress sub-path (its assets,
@@ -199,6 +204,8 @@ def build_environment(
         {"name": "DM_INSTANCE_ID", "value": str(instance_id)},
         {"name": "DM_INSTANCE_OWNER", "value": str(instance_owner)},
     ]
+    if project_name:
+        env.append({"name": "DM_PROJECT_NAME", "value": str(project_name)})
     if instance_id:
         env.append({"name": "DM_BASE_PATH", "value": f"/{instance_id}"})
     return env
@@ -500,6 +507,7 @@ def create(spec: Dict[str, Any], name: str, namespace: str, **_: Any) -> Dict[st
     # Project storage.
     project_claim_name = material.get("project", {}).get("claimName")
     project_id = material.get("project", {}).get("id")
+    project_name = material.get("project", {}).get("name")
 
     # Ingress configuration.
     ingress_proxy_body_size = material.get(
@@ -538,6 +546,7 @@ def create(spec: Dict[str, Any], name: str, namespace: str, **_: Any) -> Dict[st
 
     env = build_environment(
         project_id=project_id,
+        project_name=project_name,
         instance_id=instance_id,
         instance_owner=instance_owner,
         project_mount_path=_PROJECT_MOUNT_PATH,
