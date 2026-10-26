@@ -149,6 +149,39 @@ def test_build_environment_omits_dm_base_path_when_instance_id_absent() -> None:
     assert "DM_BASE_PATH" not in by_name
 
 
+def test_build_environment_sets_dm_project_name_when_provided() -> None:
+    # The viz-app shows the project name in its app bar and page title
+    # (squonk2-viz-components#478).
+    env = handlers.build_environment(
+        project_id="project-000",
+        project_name="My Project",
+        instance_id="instance-111",
+        instance_owner="dlister",
+        project_mount_path=PROJECT_MOUNT_PATH,
+    )
+    by_name = {item["name"]: item["value"] for item in env}
+    assert by_name["DM_PROJECT_NAME"] == "My Project"
+
+
+def test_build_environment_omits_dm_project_name_when_absent() -> None:
+    # An older Data Manager does not supply a name. The app then shows nothing.
+    env = _example_environment()
+    by_name = {item["name"]: item["value"] for item in env}
+    assert "DM_PROJECT_NAME" not in by_name
+
+
+def test_build_environment_omits_dm_project_name_when_empty() -> None:
+    env = handlers.build_environment(
+        project_id="project-000",
+        project_name="",
+        instance_id="instance-111",
+        instance_owner="dlister",
+        project_mount_path=PROJECT_MOUNT_PATH,
+    )
+    by_name = {item["name"]: item["value"] for item in env}
+    assert "DM_PROJECT_NAME" not in by_name
+
+
 # --- service ----------------------------------------------------------------
 
 

@@ -42,8 +42,9 @@ that repo when a behaviour here is unclear.
 - The viz-app container listens on port **5170** and **exits at start-up
   unless `DM_PROJECT_DIR` is set**. The operator mounts the Project PVC at
   `/project` and injects `DM_PROJECT_DIR`, `DM_PROJECT_ID`, `DM_INSTANCE_ID`
-  and `DM_INSTANCE_OWNER`. (Issue #1 said "no Pod env vars", but the image
-  requires these — see the note in `README.md` and `handlers.py`.)
+  and `DM_INSTANCE_OWNER`. It also injects `DM_PROJECT_NAME`, but only when
+  the DM supplies `spec.imDataManager.project.name`. (Issue #1 said "no Pod
+  env vars", but the image requires these — see the note in `README.md` and `handlers.py`.)
 - Created objects are adopted via `kopf.adopt`, so Kubernetes garbage-collects
   them when the custom resource is deleted (no explicit delete handler).
 - The viz-app image is in a **private** registry, so instance Pods reference a
