@@ -87,6 +87,8 @@ def test_missing_required_field_is_permanent_error(missing: str) -> None:
         ("role", ""),
         ("password", 42),
         ("maxBytes", 0),
+        ("maxBytes", -1),
+        ("maxBytes", 1.5),
         ("maxBytes", "2GiB"),
         ("maxBytes", True),
     ],
