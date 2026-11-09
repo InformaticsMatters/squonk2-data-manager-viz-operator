@@ -51,6 +51,18 @@ def test_defaults_are_applied() -> None:
     assert dc.password == "s3cret"
 
 
+def test_max_bytes_is_optional() -> None:
+    dc = datacentre.parse_data_centre(_material())
+    assert dc is not None
+    assert dc.max_bytes is None
+
+
+def test_max_bytes_is_read() -> None:
+    dc = datacentre.parse_data_centre(_material(maxBytes=2147483648))
+    assert dc is not None
+    assert dc.max_bytes == 2147483648
+
+
 def test_explicit_values_are_read() -> None:
     dc = datacentre.parse_data_centre(_material(port=6543, ssl=True))
     assert dc is not None
@@ -74,6 +86,9 @@ def test_missing_required_field_is_permanent_error(missing: str) -> None:
         ("ssl", "true"),
         ("role", ""),
         ("password", 42),
+        ("maxBytes", 0),
+        ("maxBytes", "2GiB"),
+        ("maxBytes", True),
     ],
 )
 def test_invalid_values_are_permanent_errors(field: str, value: Any) -> None:
@@ -117,6 +132,11 @@ def test_environment_carries_everything_the_app_needs() -> None:
 def test_environment_sets_ssl_only_when_asked() -> None:
     assert _env(ssl=True)["DATA_CENTRE_PG_SSL"] == "true"
     assert "DATA_CENTRE_PG_SSL" not in _env(ssl=False)
+
+
+def test_environment_sets_max_bytes_only_when_given() -> None:
+    assert _env(maxBytes=2147483648)["DATA_CENTRE_MAX_BYTES"] == "2147483648"
+    assert "DATA_CENTRE_MAX_BYTES" not in _env()
 
 
 # --- redact_spec ---------------------------------------------------------------
