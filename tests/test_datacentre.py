@@ -49,19 +49,24 @@ def test_defaults_are_applied() -> None:
     assert dc.schema == f"p_{PROJECT_KEY}"
     assert dc.role == f"u_{PROJECT_KEY}"
     assert dc.password == "s3cret"
-    assert dc.max_bytes is None
 
 
-def test_explicit_values_are_read() -> None:
-    dc = datacentre.parse_data_centre(_material(port=6543, ssl=True))
+def test_max_bytes_is_optional() -> None:
+    dc = datacentre.parse_data_centre(_material())
     assert dc is not None
-    assert (dc.port, dc.ssl) == (6543, True)
+    assert dc.max_bytes is None
 
 
 def test_max_bytes_is_read() -> None:
     dc = datacentre.parse_data_centre(_material(maxBytes=2147483648))
     assert dc is not None
     assert dc.max_bytes == 2147483648
+
+
+def test_explicit_values_are_read() -> None:
+    dc = datacentre.parse_data_centre(_material(port=6543, ssl=True))
+    assert dc is not None
+    assert (dc.port, dc.ssl) == (6543, True)
 
 
 @pytest.mark.parametrize("missing", ["host", "database", "schema", "role", "password"])
@@ -83,10 +88,9 @@ def test_missing_required_field_is_permanent_error(missing: str) -> None:
         ("password", 42),
         ("maxBytes", 0),
         ("maxBytes", -1),
-        ("maxBytes", "2147483648"),
         ("maxBytes", 1.5),
+        ("maxBytes", "2GiB"),
         ("maxBytes", True),
-        ("maxBytes", None),
     ],
 )
 def test_invalid_values_are_permanent_errors(field: str, value: Any) -> None:

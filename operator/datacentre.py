@@ -2,11 +2,10 @@
 
 When a ``DataVisualisation`` carries ``spec.imDataManager.dataCentre`` the
 operator hands the Pod the project's database credentials as
-``DATA_CENTRE_PG_*`` variables. When the block also carries the project's size
-limit (``maxBytes``) the Pod is given it as ``DATA_CENTRE_MAX_BYTES``. The
-Account Server does not apply the limit, so the viz app must. Without the
-block the Pod is launched as before (its Data API then answers 503 and the rest
-of the app works).
+``DATA_CENTRE_PG_*`` variables. The block's optional ``maxBytes`` (the
+project's size limit) becomes ``DATA_CENTRE_MAX_BYTES``; the viz app applies
+the limit. Without the block the Pod is launched as before
+(its Data API then answers 503 and the rest of the app works).
 
 The operator does not provision anything. The Account Server (AS), as the
 superuser only it holds, creates the database, the RDKit cartridge and the
@@ -46,21 +45,21 @@ def _required_string(block: Dict[str, Any], key: str) -> str:
     return value
 
 
+def _is_positive_int(value: Any) -> bool:
+    # bool is an int in Python; it is never what was meant here.
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 1
+
+
 def _port(block: Dict[str, Any]) -> int:
     value = block.get("port", _DEFAULT_PORT)
-    # bool is an int in Python; it is never what was meant here.
-    if isinstance(value, int) and not isinstance(value, bool) and value >= 1:
-        return value
+    if _is_positive_int(value):
+        return int(value)
     raise kopf.PermanentError("dataCentre.port must be a positive integer")
 
 
 def _max_bytes(block: Dict[str, Any]) -> Optional[int]:
-    # Optional, so a CR from an older Data Manager still works.
-    if "maxBytes" not in block:
-        return None
-    value = block["maxBytes"]
-    # bool is an int in Python; it is never what was meant here.
-    if isinstance(value, int) and not isinstance(value, bool) and value >= 1:
+    value = block.get("maxBytes")
+    if value is None or _is_positive_int(value):
         return value
     raise kopf.PermanentError("dataCentre.maxBytes must be a positive integer")
 

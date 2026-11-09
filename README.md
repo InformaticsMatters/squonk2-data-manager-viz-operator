@@ -279,7 +279,7 @@ passes on only that Project's credentials: -
 | `schema` | yes | | The Project's schema |
 | `role` | yes | | The Project's role |
 | `password` | yes | | The role's password, masked when the operator logs the spec |
-| `maxBytes` | | | The Project's size limit, in bytes (a positive integer). The viz app applies it |
+| `maxBytes` | | | The Project's size limit, in bytes. The viz-app applies it |
 
 For example: -
 
@@ -295,9 +295,8 @@ dataCentre:
 ```
 
 The Pod is then given `DATA_CENTRE_PG_HOST`, `_PORT`, `_DATABASE`, `_SCHEMA`,
-`_ROLE`, `_SECRET` (and `_SSL=true`). When the block has `maxBytes`, the Pod
-is also given `DATA_CENTRE_MAX_BYTES`. The Account Server does not apply this
-limit, so the viz app must apply it. A malformed block is a permanent error
+`_ROLE`, `_SECRET` (and `_SSL=true`), and `DATA_CENTRE_MAX_BYTES` when the
+block has `maxBytes`. A malformed block is a permanent error
 and no Deployment is created. Without the block the Pod's Data API answers
 503.
 
