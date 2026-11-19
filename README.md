@@ -112,6 +112,9 @@ variables are prefixed `SVO_` (Squonk2 Viz Operator): -
 | `INGRESS_CERT_ISSUER` | _(unset)_ | cert-manager cluster issuer (when no TLS secret) |
 | `SVO_IMAGE` | `ghcr.io/informaticsmatters/squonk2-viz-app` | Image repository (the tag comes from `imageTag`) |
 | `SVO_INGRESS_CLASS` | `nginx` | Default ingress class for instances |
+| `SVO_AUTH_URL` | _(unset)_ | Base URL of the DM API, as nginx sees it. When set, each request is checked against `/project/{id}/role` (see below) |
+| `SVO_AUTH_SIGNIN_URL` | _(unset)_ | Where nginx sends a user who is not logged in (the `auth-signin` annotation) |
+| `SVO_AUTH_CACHE_DURATION` | `200 60s` | How long nginx caches a role check (the `auth-cache-duration` annotation) |
 | `SVO_IMAGE_PULL_SECRET` | _(unset)_ | Name of a `dockerconfigjson` Secret for the (private) image registry |
 | `SVO_POD_NODE_SELECTOR_KEY` | `informaticsmatters.com/purpose-application` | Pod node-selector key |
 | `SVO_POD_NODE_SELECTOR_VALUE` | `yes` | Pod node-selector value |
@@ -314,3 +317,29 @@ and no Deployment is created. Without the block the Pod's Data API answers
 [squonk2-viz-app]: https://github.com/InformaticsMatters/squonk2-viz-app
 [squonk2-viz-components#468]: https://github.com/InformaticsMatters/squonk2-viz-components/issues/468
 [squonk2-viz-components#478]: https://github.com/InformaticsMatters/squonk2-viz-components/issues/478
+
+## Instance authentication
+
+Authentication is off unless `SVO_AUTH_URL` is set
+([squonk2-viz-components#451]). When it is set, the operator adds the nginx
+`auth-*` annotations to each instance Ingress. Before each request, nginx
+calls `<SVO_AUTH_URL>/project/<project-id>/role`. The Data Manager returns: -
+
+- `401` when the user is not logged in. nginx then sends the user to
+  `SVO_AUTH_SIGNIN_URL`, if it is set
+- `403` when the user has no role in the Project
+- `200` with the `X-IM-DM-User` and `X-IM-DM-Role` headers, which nginx
+  passes to the instance Pod. The role is `administrator`, `editor` or
+  `observer`
+
+The operator also sets `DM_AUTH_MODE=gateway` in the Pod. The app then
+rejects a request that does not carry the headers.
+
+The DM accepts only a bearer token. The request from nginx must therefore
+carry the user's token, for example through an oauth2-proxy in front of
+the DM API. The operator does not supply this.
+
+Ingresses that exist already do not change. Only new instances get the
+annotations.
+
+[squonk2-viz-components#451]: https://github.com/InformaticsMatters/squonk2-viz-components/issues/451

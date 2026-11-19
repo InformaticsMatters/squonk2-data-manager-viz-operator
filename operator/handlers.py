@@ -14,6 +14,7 @@ results via the Kubernetes API.
 
 import logging
 import os
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 import kubernetes
@@ -69,6 +70,33 @@ _DEFAULT_INGRESS_PROXY_BODY_SIZE: str = "500m"
 # _get_default_ingress_class).
 _DEFAULT_INGRESS_CLASS: str = "nginx"
 
+# Ingress authentication (squonk2-viz-components#451).
+#
+# When SVO_AUTH_URL is set, nginx calls the Data Manager role endpoint
+# ('<SVO_AUTH_URL>/project/<project-id>/role') before each request. The DM
+# returns 403 when the user has no role in the Project. Otherwise it returns
+# 200 with the user and role in these response headers, which nginx then
+# passes to the instance Pod.
+_AUTH_RESPONSE_HEADERS: str = "X-IM-DM-User,X-IM-DM-Role"
+# How long nginx caches a role-check result (the 'auth-cache-duration'
+# annotation). Overridable by SVO_AUTH_CACHE_DURATION.
+_DEFAULT_AUTH_CACHE_DURATION: str = "200 60s"
+
+
+@dataclass(frozen=True)
+class IngressAuth:
+    """The Ingress authentication configuration.
+
+    ``url`` is the base URL of the Data Manager API (as seen by nginx).
+    ``signin_url`` (optional) is where nginx sends a user who is not logged in.
+    ``cache_duration`` is the value of the nginx 'auth-cache-duration'
+    annotation.
+    """
+
+    url: str
+    signin_url: Optional[str]
+    cache_duration: str
+
 
 def _get_default_image() -> str:
     """The default container image repository (without a tag).
@@ -114,6 +142,24 @@ def _get_ingress_cert_issuer() -> Optional[str]:
     Expected if an INGRESS_TLS_SECRET is not defined.
     """
     return os.environ.get("INGRESS_CERT_ISSUER")
+
+
+def _get_ingress_auth() -> Optional[IngressAuth]:
+    """The Ingress authentication configuration, or None when auth is off.
+
+    Auth is on only when SVO_AUTH_URL is set. Existing deployments (without
+    SVO_AUTH_URL) are therefore unchanged.
+    """
+    url = os.environ.get("SVO_AUTH_URL")
+    if not url:
+        return None
+    return IngressAuth(
+        url=url,
+        signin_url=os.environ.get("SVO_AUTH_SIGNIN_URL") or None,
+        cache_duration=os.environ.get(
+            "SVO_AUTH_CACHE_DURATION", _DEFAULT_AUTH_CACHE_DURATION
+        ),
+    )
 
 
 def _get_pod_node_selector() -> Dict[str, str]:
@@ -182,6 +228,7 @@ def build_environment(
     instance_owner: str,
     project_mount_path: str,
     project_name: Optional[str] = None,
+    gateway_auth: bool = False,
 ) -> List[Dict[str, str]]:
     """Build the container environment expected by the squonk2-viz-app.
 
@@ -197,6 +244,11 @@ def build_environment(
     client-side routes and API calls are then resolved relative to the prefix);
     without it the app would serve from '/' and render a blank page behind the
     path-based Ingress. It is omitted when no instance id is available.
+
+    When ``gateway_auth`` is set (the Ingress checks the user's Project role)
+    we set DM_AUTH_MODE to 'gateway'. The app then rejects any request that
+    does not carry the identity headers, so a misconfigured Ingress cannot
+    give every user the owner's rights.
     """
     env: List[Dict[str, str]] = [
         {"name": "DM_PROJECT_DIR", "value": project_mount_path},
@@ -208,6 +260,8 @@ def build_environment(
         env.append({"name": "DM_PROJECT_NAME", "value": str(project_name)})
     if instance_id:
         env.append({"name": "DM_BASE_PATH", "value": f"/{instance_id}"})
+    if gateway_auth:
+        env.append({"name": "DM_AUTH_MODE", "value": "gateway"})
     return env
 
 
@@ -345,12 +399,17 @@ def build_ingress_body(
     ingress_proxy_body_size: str,
     ingress_tls_secret: Optional[str],
     ingress_cert_issuer: Optional[str],
+    auth: Optional[IngressAuth] = None,
+    project_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Build the path-based Ingress that exposes the instance.
 
     When an explicit TLS secret is supplied it is used directly. Otherwise, if
     a cert-manager issuer is configured, the cert-manager annotation is added
     so a certificate is provisioned automatically.
+
+    When ``auth`` is supplied, the nginx 'auth-*' annotations are added (see
+    _add_auth_annotations). Without ``auth`` the Ingress is unchanged.
     """
     ingress_body: Dict[str, Any] = {
         "apiVersion": "networking.k8s.io/v1",
@@ -395,7 +454,44 @@ def build_ingress_body(
             "cert-manager.io/cluster-issuer"
         ] = ingress_cert_issuer
 
+    if auth:
+        _add_auth_annotations(
+            annotations=ingress_body["metadata"]["annotations"],
+            auth=auth,
+            project_id=project_id,
+        )
+
     return ingress_body
+
+
+def _add_auth_annotations(
+    *, annotations: Dict[str, str], auth: IngressAuth, project_id: Optional[str]
+) -> None:
+    """Add the nginx annotations that check the user's Data Manager role.
+
+    nginx calls the DM '/project/{project-id}/role' endpoint for each request.
+    The DM returns 401 (not logged in), 403 (no role in the Project) or 200
+    with the X-IM-DM-User and X-IM-DM-Role headers, which nginx passes on.
+
+    The cache key holds the user's credentials (cookie and Authorization
+    header) and the Project. Without them, nginx could give one user's cached
+    '200' to a different user.
+
+    A Project id is required. Without one we cannot build the role check, so
+    we raise a kopf PermanentError rather than create an Ingress without it.
+    """
+    if not project_id:
+        raise kopf.PermanentError(
+            "spec.imDataManager.project.id is required when SVO_AUTH_URL is set"
+        )
+    prefix = "nginx.ingress.kubernetes.io/auth-"
+    base_url = auth.url.rstrip("/")
+    annotations[f"{prefix}url"] = f"{base_url}/project/{project_id}/role"
+    annotations[f"{prefix}response-headers"] = _AUTH_RESPONSE_HEADERS
+    annotations[f"{prefix}cache-key"] = f"$http_cookie$http_authorization{project_id}"
+    annotations[f"{prefix}cache-duration"] = auth.cache_duration
+    if auth.signin_url:
+        annotations[f"{prefix}signin"] = auth.signin_url
 
 
 def build_status(
@@ -520,6 +616,7 @@ def create(spec: Dict[str, Any], name: str, namespace: str, **_: Any) -> Dict[st
     )
     ingress_cert_issuer = _get_ingress_cert_issuer()
     ingress_path = f"/{name}"
+    ingress_auth = _get_ingress_auth()
 
     # Image pull secret(s) for the (private) registry. A per-instance list
     # overrides the operator default (SVO_IMAGE_PULL_SECRET). The named Secret
@@ -550,6 +647,7 @@ def create(spec: Dict[str, Any], name: str, namespace: str, **_: Any) -> Dict[st
         instance_id=instance_id,
         instance_owner=instance_owner,
         project_mount_path=_PROJECT_MOUNT_PATH,
+        gateway_auth=ingress_auth is not None,
     )
 
     # Project database (optional)
@@ -559,6 +657,20 @@ def create(spec: Dict[str, Any], name: str, namespace: str, **_: Any) -> Dict[st
     data_centre = datacentre.parse_data_centre(material)
     if data_centre:
         env.extend(datacentre.build_data_centre_environment(data_centre))
+
+    # Build the Ingress before we create any object. Its auth check can raise
+    # a PermanentError, and we must not leave a Deployment without an Ingress.
+    ingress_body = build_ingress_body(
+        name=name,
+        ingress_path=ingress_path,
+        ingress_domain=ingress_domain,
+        ingress_class=ingress_class,
+        ingress_proxy_body_size=ingress_proxy_body_size,
+        ingress_tls_secret=ingress_tls_secret,
+        ingress_cert_issuer=ingress_cert_issuer,
+        auth=ingress_auth,
+        project_id=project_id,
+    )
 
     apps_api = kubernetes.client.AppsV1Api()
     core_api = kubernetes.client.CoreV1Api()
@@ -606,15 +718,6 @@ def create(spec: Dict[str, Any], name: str, namespace: str, **_: Any) -> Dict[st
     # Ingress
     # -------
     logging.info("Creating Ingress %s...", name)
-    ingress_body = build_ingress_body(
-        name=name,
-        ingress_path=ingress_path,
-        ingress_domain=ingress_domain,
-        ingress_class=ingress_class,
-        ingress_proxy_body_size=ingress_proxy_body_size,
-        ingress_tls_secret=ingress_tls_secret,
-        ingress_cert_issuer=ingress_cert_issuer,
-    )
     kopf.adopt(ingress_body)
     _create_ignoring_conflict(
         lambda: networking_api.create_namespaced_ingress(
