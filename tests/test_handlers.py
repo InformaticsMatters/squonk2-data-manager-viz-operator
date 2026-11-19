@@ -361,6 +361,152 @@ def test_build_ingress_body_uses_cert_manager_without_tls_secret() -> None:
     assert annotations["cert-manager.io/cluster-issuer"] == "letsencrypt"
 
 
+# --- ingress authentication (squonk2-viz-components#451) -------------------
+
+AUTH_ANNOTATION_PREFIX = "nginx.ingress.kubernetes.io/auth-"
+
+
+def _example_ingress(**overrides: Any) -> Dict[str, Any]:
+    kwargs: Dict[str, Any] = {
+        "name": "viz-abcdef",
+        "ingress_path": "/viz-abcdef",
+        "ingress_domain": "example.com",
+        "ingress_class": "nginx",
+        "ingress_proxy_body_size": "500m",
+        "ingress_tls_secret": "tls-secret",
+        "ingress_cert_issuer": None,
+    }
+    kwargs.update(overrides)
+    return handlers.build_ingress_body(**kwargs)
+
+
+def _example_auth(**overrides: Any) -> "handlers.IngressAuth":
+    kwargs: Dict[str, Any] = {
+        "url": "https://example.com/dm-auth",
+        "signin_url": "https://example.com/oauth2/start?rd=$escaped_request_uri",
+        "cache_duration": "200 60s",
+    }
+    kwargs.update(overrides)
+    return handlers.IngressAuth(**kwargs)
+
+
+def test_build_ingress_body_without_auth_has_no_auth_annotations() -> None:
+    body = _example_ingress()
+    annotations = body["metadata"]["annotations"]
+    assert not [a for a in annotations if a.startswith(AUTH_ANNOTATION_PREFIX)]
+
+
+def test_build_ingress_body_without_auth_is_unchanged() -> None:
+    # Auth is opt-in: an explicit None must give exactly the original Ingress.
+    assert _example_ingress(auth=None, project_id="project-000") == _example_ingress()
+
+
+def test_build_ingress_body_auth_url_checks_the_dm_project_role() -> None:
+    body = _example_ingress(auth=_example_auth(), project_id="project-000")
+    annotations = body["metadata"]["annotations"]
+    assert (
+        annotations[f"{AUTH_ANNOTATION_PREFIX}url"]
+        == "https://example.com/dm-auth/project/project-000/role"
+    )
+
+
+def test_build_ingress_body_auth_url_tolerates_a_trailing_slash() -> None:
+    body = _example_ingress(
+        auth=_example_auth(url="https://example.com/dm-auth/"),
+        project_id="project-000",
+    )
+    annotations = body["metadata"]["annotations"]
+    assert (
+        annotations[f"{AUTH_ANNOTATION_PREFIX}url"]
+        == "https://example.com/dm-auth/project/project-000/role"
+    )
+
+
+def test_build_ingress_body_auth_passes_the_dm_identity_headers() -> None:
+    body = _example_ingress(auth=_example_auth(), project_id="project-000")
+    annotations = body["metadata"]["annotations"]
+    assert (
+        annotations[f"{AUTH_ANNOTATION_PREFIX}response-headers"]
+        == "X-IM-DM-User,X-IM-DM-Role"
+    )
+
+
+def test_build_ingress_body_auth_sets_the_signin_url() -> None:
+    body = _example_ingress(auth=_example_auth(), project_id="project-000")
+    annotations = body["metadata"]["annotations"]
+    assert (
+        annotations[f"{AUTH_ANNOTATION_PREFIX}signin"]
+        == "https://example.com/oauth2/start?rd=$escaped_request_uri"
+    )
+
+
+def test_build_ingress_body_auth_omits_signin_when_not_configured() -> None:
+    body = _example_ingress(
+        auth=_example_auth(signin_url=None), project_id="project-000"
+    )
+    assert f"{AUTH_ANNOTATION_PREFIX}signin" not in body["metadata"]["annotations"]
+
+
+def test_build_ingress_body_auth_cache_key_is_per_user_and_project() -> None:
+    # A key without the user's credentials would let nginx give one user's
+    # cached '200' to a different user.
+    body = _example_ingress(auth=_example_auth(), project_id="project-000")
+    annotations = body["metadata"]["annotations"]
+    key = annotations[f"{AUTH_ANNOTATION_PREFIX}cache-key"]
+    assert "$http_cookie" in key
+    assert "$http_authorization" in key
+    assert "project-000" in key
+    assert annotations[f"{AUTH_ANNOTATION_PREFIX}cache-duration"] == "200 60s"
+
+
+def test_build_ingress_body_auth_without_project_id_is_a_permanent_error() -> None:
+    # Fail closed: we must never create an Ingress with a broken role check.
+    with pytest.raises(kopf.PermanentError):
+        _example_ingress(auth=_example_auth(), project_id=None)
+
+
+def test_get_ingress_auth_is_none_when_unset(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("SVO_AUTH_URL", raising=False)
+    assert handlers._get_ingress_auth() is None
+
+
+def test_get_ingress_auth_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SVO_AUTH_URL", "https://example.com/dm-auth")
+    monkeypatch.setenv("SVO_AUTH_SIGNIN_URL", "https://example.com/oauth2/start")
+    monkeypatch.setenv("SVO_AUTH_CACHE_DURATION", "200 30s")
+    assert handlers._get_ingress_auth() == handlers.IngressAuth(
+        url="https://example.com/dm-auth",
+        signin_url="https://example.com/oauth2/start",
+        cache_duration="200 30s",
+    )
+
+
+def test_get_ingress_auth_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SVO_AUTH_URL", "https://example.com/dm-auth")
+    monkeypatch.delenv("SVO_AUTH_SIGNIN_URL", raising=False)
+    monkeypatch.delenv("SVO_AUTH_CACHE_DURATION", raising=False)
+    auth = handlers._get_ingress_auth()
+    assert auth is not None
+    assert auth.signin_url is None
+    assert auth.cache_duration == handlers._DEFAULT_AUTH_CACHE_DURATION
+
+
+def test_build_environment_sets_gateway_auth_mode_when_requested() -> None:
+    env = handlers.build_environment(
+        project_id="project-000",
+        instance_id="instance-111",
+        instance_owner="dlister",
+        project_mount_path=PROJECT_MOUNT_PATH,
+        gateway_auth=True,
+    )
+    assert {"name": "DM_AUTH_MODE", "value": "gateway"} in env
+
+
+def test_build_environment_omits_auth_mode_by_default() -> None:
+    names = [e["name"] for e in _example_environment()]
+    assert "DM_AUTH_MODE" not in names
+
+
 # --- ingress config ---------------------------------------------------------
 
 
