@@ -98,6 +98,19 @@ class IngressAuth:
     cache_duration: str
 
 
+@dataclass(frozen=True)
+class ImportLimit:
+    """The size limit of one import (squonk2-viz-components#422).
+
+    ``proxy_body_size`` is the value of the nginx 'proxy-body-size' Ingress
+    annotation. ``max_bytes`` is the value of the app's DATA_IMPORT_MAX_BYTES
+    variable, or ``None`` when the app must not get the variable.
+    """
+
+    proxy_body_size: str
+    max_bytes: Optional[int]
+
+
 def _get_default_image() -> str:
     """The default container image repository (without a tag).
 
@@ -221,6 +234,39 @@ def image_pull_policy_for(image: str) -> str:
     return "Always" if image_tag.lower() in ["latest", "stable"] else "IfNotPresent"
 
 
+def build_import_limit(material: Dict[str, Any]) -> ImportLimit:
+    """Get the import limit from 'spec.imDataManager.importMaxBytes'.
+
+    The Data Manager supplies one value (in bytes) and the operator uses it
+    for the Ingress and for the app, so the two limits cannot be different.
+    nginx reads a size without a suffix as bytes.
+
+    - A positive integer: both limits are that number.
+    - ``0``: no limit. The Ingress body size is '0' (nginx does not check it)
+      and the app does not get DATA_IMPORT_MAX_BYTES.
+    - Absent (an older Data Manager): the Ingress uses 'ingressProxyBodySize'
+      (or the default) and the app does not get DATA_IMPORT_MAX_BYTES.
+
+    Any other value is a kopf PermanentError: a retry cannot correct it.
+    """
+    if "importMaxBytes" not in material:
+        return ImportLimit(
+            proxy_body_size=material.get(
+                "ingressProxyBodySize", _DEFAULT_INGRESS_PROXY_BODY_SIZE
+            ),
+            max_bytes=None,
+        )
+    value = material["importMaxBytes"]
+    # bool is an int in Python; it is never what was meant here.
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise kopf.PermanentError(
+            "spec.imDataManager.importMaxBytes must be an integer of 0 or more"
+        )
+    if value == 0:
+        return ImportLimit(proxy_body_size="0", max_bytes=None)
+    return ImportLimit(proxy_body_size=str(value), max_bytes=value)
+
+
 def build_environment(
     *,
     project_id: str,
@@ -229,6 +275,7 @@ def build_environment(
     project_mount_path: str,
     project_name: Optional[str] = None,
     gateway_auth: bool = False,
+    import_max_bytes: Optional[int] = None,
 ) -> List[Dict[str, str]]:
     """Build the container environment expected by the squonk2-viz-app.
 
@@ -249,6 +296,9 @@ def build_environment(
     we set DM_AUTH_MODE to 'gateway'. The app then rejects any request that
     does not carry the identity headers, so a misconfigured Ingress cannot
     give every user the owner's rights.
+
+    DATA_IMPORT_MAX_BYTES is set only when ``import_max_bytes`` is given (see
+    build_import_limit). Without it the app applies no import limit of its own.
     """
     env: List[Dict[str, str]] = [
         {"name": "DM_PROJECT_DIR", "value": project_mount_path},
@@ -262,6 +312,8 @@ def build_environment(
         env.append({"name": "DM_BASE_PATH", "value": f"/{instance_id}"})
     if gateway_auth:
         env.append({"name": "DM_AUTH_MODE", "value": "gateway"})
+    if import_max_bytes is not None:
+        env.append({"name": "DATA_IMPORT_MAX_BYTES", "value": str(import_max_bytes)})
     return env
 
 
@@ -606,9 +658,9 @@ def create(spec: Dict[str, Any], name: str, namespace: str, **_: Any) -> Dict[st
     project_name = material.get("project", {}).get("name")
 
     # Ingress configuration.
-    ingress_proxy_body_size = material.get(
-        "ingressProxyBodySize", _DEFAULT_INGRESS_PROXY_BODY_SIZE
-    )
+    #
+    # The import limit sets the Ingress body size, and the app's own limit.
+    import_limit = build_import_limit(material)
     ingress_class = material.get("ingressClass", _get_default_ingress_class())
     ingress_domain = material.get("ingressDomain", _get_default_ingress_domain())
     ingress_tls_secret = material.get(
@@ -648,6 +700,7 @@ def create(spec: Dict[str, Any], name: str, namespace: str, **_: Any) -> Dict[st
         instance_owner=instance_owner,
         project_mount_path=_PROJECT_MOUNT_PATH,
         gateway_auth=ingress_auth is not None,
+        import_max_bytes=import_limit.max_bytes,
     )
 
     # Project database (optional)
@@ -665,7 +718,7 @@ def create(spec: Dict[str, Any], name: str, namespace: str, **_: Any) -> Dict[st
         ingress_path=ingress_path,
         ingress_domain=ingress_domain,
         ingress_class=ingress_class,
-        ingress_proxy_body_size=ingress_proxy_body_size,
+        ingress_proxy_body_size=import_limit.proxy_body_size,
         ingress_tls_secret=ingress_tls_secret,
         ingress_cert_issuer=ingress_cert_issuer,
         auth=ingress_auth,

@@ -514,6 +514,59 @@ def test_default_ingress_proxy_body_size_is_500_megabytes() -> None:
     assert handlers._DEFAULT_INGRESS_PROXY_BODY_SIZE == "500m"
 
 
+# --- import limit (squonk2-viz-components#422) ------------------------------
+
+
+def test_import_limit_absent_keeps_the_default_proxy_body_size() -> None:
+    limit = handlers.build_import_limit({})
+    assert limit.proxy_body_size == "500m"
+    assert limit.max_bytes is None
+
+
+def test_import_limit_absent_keeps_ingress_proxy_body_size() -> None:
+    limit = handlers.build_import_limit({"ingressProxyBodySize": "2g"})
+    assert limit.proxy_body_size == "2g"
+    assert limit.max_bytes is None
+
+
+def test_import_limit_value_sets_both_limits_in_bytes() -> None:
+    limit = handlers.build_import_limit(
+        {"importMaxBytes": 524288000, "ingressProxyBodySize": "2g"}
+    )
+    assert limit.proxy_body_size == "524288000"
+    assert limit.max_bytes == 524288000
+
+
+def test_import_limit_zero_means_no_limit() -> None:
+    limit = handlers.build_import_limit(
+        {"importMaxBytes": 0, "ingressProxyBodySize": "2g"}
+    )
+    assert limit.proxy_body_size == "0"
+    assert limit.max_bytes is None
+
+
+@pytest.mark.parametrize("value", [-1, 1.5, "500MiB", True, None])
+def test_import_limit_invalid_value_is_a_permanent_error(value: Any) -> None:
+    with pytest.raises(kopf.PermanentError, match="importMaxBytes"):
+        handlers.build_import_limit({"importMaxBytes": value})
+
+
+def test_build_environment_sets_data_import_max_bytes_when_given() -> None:
+    env = handlers.build_environment(
+        project_id="project-000",
+        instance_id="instance-111",
+        instance_owner="dlister",
+        project_mount_path=PROJECT_MOUNT_PATH,
+        import_max_bytes=524288000,
+    )
+    assert {"name": "DATA_IMPORT_MAX_BYTES", "value": "524288000"} in env
+
+
+def test_build_environment_omits_data_import_max_bytes_by_default() -> None:
+    names = [e["name"] for e in _example_environment()]
+    assert "DATA_IMPORT_MAX_BYTES" not in names
+
+
 def test_default_ingress_class_falls_back_to_the_constant(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
